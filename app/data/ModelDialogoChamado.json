@@ -1,0 +1,23 @@
+[
+    {
+        "id": "produto",
+        "prompt": "Por favor, na lista de serviços a baixo escolha para qual deseja atendimento",
+        "errorPrompt": "opção inválida, seleione abaixo",
+        "type": "choice",
+        "choices": [
+            {
+                "value": "Meu site",
+                "synonyms": ["Meu site", "Site", "site", "s"]
+            },
+            {
+                "value": "Meu Email",
+                "synonyms": ["Meu E-mail", "meu email", "e-mail", "mail"]
+            }
+        ]
+   },
+   {
+        "id": "descricao_problema",
+        "prompt": "Por favor, informe sobre seu problema.",
+        "type": "text"
+   }
+]
