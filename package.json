@@ -4,7 +4,7 @@
   "description": "bothelpdesk",
   "main": "app\\index.js",
   "scripts": {
-    "start": "app\\index.js"
+    "start": "node app\\index.js"
   },
   "author": "Henrique",
   "license": "ISC",
@@ -13,6 +13,7 @@
     "botbuilder-cognitiveservices": "^1.1.0",
     "dotenv-extended": "^2.0.1",
     "formflowbotbuilder": "^0.1.4",
+    "package.json": "^2.0.1",
     "restify": "^7.1.0"
   }
 }
