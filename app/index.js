@@ -5,6 +5,7 @@ const builder = require('botbuilder')
 const restify = require('restify')
 const moment = require('moment')
 const path = require('path')
+const request = require('request')
 
 //=========================================================
 // Bot Setup
@@ -58,30 +59,59 @@ intents.matches('None', (session, args, next) => {
 
 })
 
-intents.matches('recepcao', (session, args, next) => {
-    msg = 'Olá, sou um robo e sera um prazer atendelo'
+intents.matches('Recepcao', (session, args, next) => {
+    msg =  saudacao() +  ', Olá tudo bem, sou um robo e será um prazer atendelo'
     session.send(msg)
 })
 
-intents.matches('Problemas', (session, args, next) => {
+intents.matches('Gratidao', (session, args, next) => {
+    msg = 'Imagina é sempre um prazer ser util, ' + saudacao() + ' até mais'     
+    session.endConversation(msg);
+})
+
+intents.matches('Problemas', (session, args, next) => {            
     var msg = 'Infelizmente para esta pergunta ainda não tenho resposta,\n ' +
-              'mas podemos abrir um chamado,\n'                             
+              'Podemos abrir um chamado\n'         
+
     session.send( msg )
     session.beginDialog('cadastrocliente')
 })
 
-intents.matches('consciencia', (session, args, next) => {
+intents.matches('Consciencia', (session, args, next) => {
     session.send('Sou um assistente virtual de helpdesk, ao seu dispor')
 })
 
-/*intents.matches('Chamado', (session, args, next) => {
+intents.matches('AbrirChamado', (session, args, next) => {
+    session.send('Eu posso lhe ajudar com isso.')
     session.beginDialog('cadastrocliente')
+    
+})
 
-})*/
+intents.matches('StatusChamado', (session, args, next) => {
 
-intents.matches('Status', (session, args, next) => {
-    session.beginDialog('statuschamado')
-
+    const numero = builder.EntityRecognizer.findEntity(args.entities, 'numero_chamado')
+    console.log( 'entities = ' + numero )
+    if(numero == null){
+        return session.send("Certifique-se de digitar o numero de chamado, corretamente.")
+    }
+    
+    //TODO GET REQUEST API CHAMADO
+    //const endpoint = `${process.env.COTACAO_ENDPOINT}${moedas}`
+    const endpoint = 'https://webappchamado.azurewebsites.net/chamados/' + numero.entity
+    session.send('Aguarde um momento enquanto localizo seu chamado')
+    request(endpoint, (error, response, body) => {
+        if(error || !body)
+            return session.send('Ocorreu algum erro, tente novamente mais tarde.')
+        const jsonStatus = JSON.parse(body);
+        msg = jsonStatus['mensagem']
+        
+        status = jsonStatus['status']
+        if(typeof status === 'undefined'){
+            session.send(  msg + ", verifique se digitou correntamente e tente mais uma vez."  )
+        }else{
+            session.send('Status do chamado ' + numero.entity + ': ' + status)
+        }                
+    })    
 })
 //=======================================================
 
@@ -99,17 +129,19 @@ formflowbotbuilder.executeFormFlow(formDadosCliente, bot, dialogDadosCliente, (e
 
        (session) => {
             if(!session.userData.reload)
-                session.send('Vou precisar que me cofirme alguns dados para dar continuidade com o chamado')
+                session.send('Mas antes vou precisar que me cofirme alguns dados.')
                 session.beginDialog(dialogDadosCliente)
        },
 
        (session, results) => {
-           session.conversationData.nome = responses.nome;
-           session.conversationData.email = responses.email;
-           session.conversationData.contrato = responses.contrato;
-           session.conversationData.produto = responses.produto;
-           session.conversationData.descricao_problema = responses.descricao_problema;
-           const questao = `Confirme os dados a baixo?\n`
+
+        session.dialogData.nome = responses.nome
+        session.dialogData.email = responses.email
+        session.dialogData.contrato = responses.contrato
+        session.dialogData.produto = responses.produto
+        session.dialogData.descricao_problema = responses.descricao_problema
+                   
+           const questao = `A informação a baixo está correta?\n`
                         + `* Nome: ${responses.nome}\n` 
                         + `* E-mail: ${responses.email}\n`
                         + `* Contrato: ${responses.contrato}\n`
@@ -121,34 +153,37 @@ formflowbotbuilder.executeFormFlow(formDadosCliente, bot, dialogDadosCliente, (e
                 retryPrompt: 'Deculpa, não entendi, selecione uma das opções'
             }
             builder.Prompts.confirm(session, questao, options)
+
        },
        (session, results) => {
-            if(results.response){
-                session.save()
-                return session.send('Muito obrigado, só mais alguns instante sera gerado um numero de chamado')
-                //TODO sender chamdo para app
+            if(results.response){  
+                session.save()              
+                session.send('Muito obrigado, só mais alguns instante que será gerado um número de chamado')                                                
+                const endpoint = 'https://webappchamado.azurewebsites.net/novo/'+responses.produto+'/'+responses.nome +'/'+responses.descricao_problema
+                console.log('endpoint = ' + endpoint)     
+
+                request(endpoint, (error, response, body) => {
+                    if(error || !body)
+                        return session.send('Ocorreu algum erro, tente novamente mais tarde.')
+                        
+                    const jsonStatus = JSON.parse(body);
+                    erro_code = jsonStatus['code']
+                    num_chamado = jsonStatus['num_chamado']
+                    if(typeof num_chamado === 'undefined'){
+                        return session.send(  erro_code + ", Ocorreu algum erro, tente novamente mais tarde."  )
+                    }else{
+                       return session.send('Chamado aberto com sucesso, anote o número para acompanhar os status: ' + num_chamado )
+                    }                
+                })    
+            }else{
+                session.userData.reload = true;
+                session.send('Tudo bem, vamos tentar novamente')
+                session.replaceDialog('cadastrocliente')
             }
-            session.userData.reload = true;
-            session.send('Tudo bem, vamos tentar novamente')
-            session.replaceDialog('cadastrocliente')
         }
     ])
 })
 
-bot.dialog('statuschamado', [
-
-    (session) => {
-         if(!session.userData.reload)
-             return session.send('Vou precisar que me cofirme o numero do chamado')
-    },
-
-    (session, results) => {
-        session.conversationData.numero_chamado = responses.numero_chamado;
-        //TODO GET CHAMADO API
-        console.log(session.conversationData.numero_chamado)
-        return session.send('so mais um instante que irei localizer seu chamado ' + session.conversationData.numero_chamado)             
-    }
- ])
 
 
 bot.on('conversationUpdate', (update) => {
@@ -158,8 +193,7 @@ bot.on('conversationUpdate', (update) => {
                 bot.loadSession(update.address, (err, session) => {
                     if(err)
                         return err
-                    const message = 'Olá, Sou um assistente virtual de helpdesk, poderei lhe ajudar da seguinte maneira:\n' +
-                    '* **Duvidas de serviços disponiveis**\n' +
+                    const message = 'Olá, Sou um assistente virtual de helpdesk, poderei lhe ajudar da seguinte maneira:\n' +                    
                     '* **Abertura de chamados**\n' +
                     '* **Consultar status de chamados abertos**'
                     session.send(message)
